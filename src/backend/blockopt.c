@@ -1839,6 +1839,37 @@ STATIC void block_check()
 
 #endif
 
+STATIC int tco_eligible(elem **pe)
+{   elem *e;
+    while ((*pe)->Eoper == OPcomma)
+        pe = &(*pe)->E2;
+    e = *pe;
+    if (OTcall(e->Eoper) &&
+        e->E1->Eoper == OPvar &&
+        e->E1->EV.sp.Vsym == funcsym_p)
+        return 1;
+
+    return 0;
+}
+
+STATIC void tco_paramAssign(elem **pe)
+{   elem *e = *pe;
+//printf("before:\n");
+//elem_print(*pe);
+    if (OTunary(e->Eoper))
+    {   *pe = el_long(TYint,0);
+    }
+    else
+    {   int si = 0;
+        elem *e2 = NULL;
+        *pe = assignparams(&e->E2,&si,&e2);
+        *pe = el_combine(*pe,e2);
+    }
+    el_free(e);
+//printf("after:\n");
+//elem_print(*pe);
+}
+
 /***************************************
  * Do tail recursion.
  */
@@ -1894,20 +1925,7 @@ STATIC void brtailrecursion()
                 e->E1->Eoper == OPvar &&
                 e->E1->EV.sp.Vsym == funcsym_p)
             {
-//printf("before:\n");
-//elem_print(*pe);
-                if (OTunary(e->Eoper))
-                {   *pe = el_long(TYint,0);
-                }
-                else
-                {   int si = 0;
-                    elem *e2 = NULL;
-                    *pe = assignparams(&e->E2,&si,&e2);
-                    *pe = el_combine(*pe,e2);
-                }
-                el_free(e);
-//printf("after:\n");
-//elem_print(*pe);
+                tco_paramAssign(pe);
 
                 if (b->BC == BCgoto)
                 {   list_subtract(&b->Bsucc,bn);
@@ -1928,6 +1946,113 @@ STATIC void brtailrecursion()
                 startblock = bs;
 
                 cmes("tail recursion\n");
+                changes++;
+                return;
+            }
+            else if (e->Eoper == OPcond)
+            {   // N.B.: Currently doesn't try to optimize nested OPcond's
+                // Too much work for such rare use
+                int truebr_eligible = tco_eligible(&(*pe)->E2->E1);
+                int falsebr_eligible = tco_eligible(&(*pe)->E2->E2);
+
+                if (!(truebr_eligible || falsebr_eligible))
+                    continue;
+
+                // Split b into 3:
+                //  BCiftrue -> Belem = (*pe_cond)->E1
+                //    -> Bsucc[0] = BCretexp -> Belem = (*pe_cond)->E2->E1
+                //    -> Bsucc[1] = BCretexp -> Belem = (*pe_cond)->E2->E2
+                // We should be able to re-use the current block.
+                // Also create new start block with predecessors
+                // to the eligible Bsucc blocks
+
+                // Create the 3 new blocks
+                block *startb, *trueb, *falseb;
+                numblks += 3;
+                startb = block_calloc();
+                trueb = block_calloc();
+                falseb = block_calloc();
+
+                startb->BC = BCgoto;
+                trueb->BC = truebr_eligible ? BCgoto : b->BC;
+                falseb->BC = falsebr_eligible ? BCgoto : b->BC;
+
+                // Reuse current block for BCiftrue
+                if (b->BC == BCgoto)
+                {   list_subtract(&b->Bsucc,bn);
+                    list_subtract(&bn->Bpred,b);
+                    if (!truebr_eligible)
+                    {    list_append(&trueb->Bsucc,bn);
+                         list_append(&bn->Bpred,trueb);
+                    }
+                    if (!falsebr_eligible)
+                    {    list_append(&falseb->Bsucc,bn);
+                         list_append(&bn->Bpred,falseb);
+                    }
+                }
+                assert(!b->Bsucc);
+
+                b->BC = BCiftrue;
+                b->Belem = b->Belem->E1;
+
+                list_append(&b->Bsucc, trueb);
+                list_append(&trueb->Bpred, b);
+                list_append(&b->Bsucc, falseb);
+                list_append(&falseb->Bpred, b);
+
+                // Setup with startblock
+                startb = block_calloc();
+                startb->BC = BCgoto;
+                startb->Bnext = startblock;
+                list_append(&startb->Bsucc, startblock);
+                list_append(&startblock->Bpred, startb);
+                startblock = startb;
+
+                if (truebr_eligible)
+                {
+                    list_append(&trueb->Bsucc, startb);
+                    list_append(&startb->Bpred, trueb);
+                }
+                if (falsebr_eligible)
+                {
+                    list_append(&falseb->Bsucc, startb);
+                    list_append(&startb->Bpred, falseb);
+                }
+
+                // Setup trueb
+                trueb->Belem = e->E2->E1;
+                block *tmp = b->Bnext;
+                b->Bnext = trueb;
+                trueb->Bnext = tmp;
+
+                if (truebr_eligible)
+                {
+                    pe = &trueb->Belem;
+                    while ((*pe)->Eoper == OPcomma)
+                        pe = &(*pe)->E2;
+                    tco_paramAssign(pe);
+                }
+
+                // Setup falseb
+                falseb->Belem = e->E2->E2;
+                tmp = trueb->Bnext;
+                trueb->Bnext = falseb;
+                falseb->Bnext = tmp;
+
+                if (falsebr_eligible)
+                {
+                    pe = &falseb->Belem;
+                    while ((*pe)->Eoper == OPcomma)
+                        pe = &(*pe)->E2;
+                    tco_paramAssign(pe);
+                }
+
+                e->E1 = NULL;
+                e->E2->E1 = NULL;
+                e->E2->E2 = NULL;
+                el_free(e);
+
+                cmes("?: tail recursion\n");
                 changes++;
                 return;
             }
