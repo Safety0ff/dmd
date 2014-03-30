@@ -307,6 +307,7 @@ clean:
 	$(DEL) impcnvtab.c
 	$(DEL) id.h id.c
 	$(DEL) verstr.h
+	$(DEL) $(GENSRC)
 
 install: detab install-copy
 
@@ -383,6 +384,58 @@ id.h id.c : idgen.c
 
 verstr.h : ..\VERSION
 	echo "$(..\VERSION)" >verstr.h
+
+############################# DDMD stuff ############################
+
+DC = $(TARGETEXE)
+
+MAGICPORTDIR = magicport
+MAGICPORTSRC = \
+	$(MAGICPORTDIR)\magicport2.d $(MAGICPORTDIR)\ast.d \
+	$(MAGICPORTDIR)\scanner.d $(MAGICPORTDIR)\tokens.d \
+	$(MAGICPORTDIR)\parser.d $(MAGICPORTDIR)\dprinter.d \
+	$(MAGICPORTDIR)\typenames.d $(MAGICPORTDIR)\visitor.d \
+	$(MAGICPORTDIR)\namer.d
+
+MAGICPORT = $(MAGICPORTDIR)\magicport2.exe
+
+$(MAGICPORT) : $(MAGICPORTSRC)
+	$(DC) $(MODEL_FLAG) -of$(MAGICPORT) $(MAGICPORTSRC)
+
+GENSRC=access.d aggregate.d aliasthis.d apply.d \
+	argtypes.d arrayop.d arraytypes.d \
+	attrib.d builtin.d canthrow.d dcast.d \
+	dclass.d clone.d cond.d constfold.d \
+	cppmangle.d ctfeexpr.d declaration.d \
+	delegatize.d doc.d dsymbol.d \
+	denum.d expression.d func.d \
+	hdrgen.d id.d identifier.d imphint.d \
+	dimport.d dinifile.d inline.d init.d \
+	dinterpret.d json.d lexer.d link.d \
+	dmacro.d dmangle.d mars.d \
+	dmodule.d mtype.d opover.d optimize.d \
+	parse.d sapply.d dscope.d sideeffect.d \
+	statement.d staticassert.d dstruct.d \
+	target.d dtemplate.d traits.d dunittest.d \
+	utf.d dversion.d visitor.d lib.d \
+	nogc.d nspace.d color.d \
+	$(ROOT)\file.d $(ROOT)\filename.d $(ROOT)\speller.d
+
+MANUALSRC= \
+	intrange.d complex.d longdouble.d \
+	entity.d \
+	$(ROOT)\aav.d $(ROOT)\array.d \
+	$(ROOT)\man.d $(ROOT)\rootobject.d $(ROOT)\outbuffer.d $(ROOT)\port.d \
+	$(ROOT)\response.d $(ROOT)\rmem.d  $(ROOT)\stringtable.d
+
+$(GENSRC) : $(SRCS) $(ROOTSRC) settings.json $(MAGICPORT)
+	$(MAGICPORT) . .
+
+DSRC= $(GENSRC) $(MANUALSRC)
+
+ddmd: ddmd.exe
+ddmd.exe: $(DC) $(DSRC) glue.lib backend.lib outbuffer.obj aav.obj stringtable.obj
+	$(DC) $(DSRC) -ofddmd.exe glue.lib backend.lib outbuffer.obj aav.obj stringtable.obj -debug -vtls -J.. -d -version=DMDV2 -L/STACK:8388608 -g -map
 
 ############################# Intermediate Rules ############################
 
