@@ -267,7 +267,7 @@ clean:
 	impcnvtab.c optabgen debtab.c optab.c cdxxx.c elxxx.c fltables.c \
 	tytab.c verstr.h core \
 	*.cov *.deps *.gcda *.gcno *.a \
-	$(GENSRC)
+	$(GENSRC) $(MAGICPORT)
 
 ######## optabgen generates some source
 
@@ -476,7 +476,7 @@ MAGICPORTSRC = \
 
 MAGICPORT = $(MAGICPORTDIR)/magicport2
 
-$(MAGICPORT) : $(MAGICPORTSRC)
+$(MAGICPORT) : $(DC) $(MAGICPORTSRC)
 	$(DC) $(MODEL_FLAG) -of$(MAGICPORT) $(MAGICPORTSRC)
 
 GENSRC=access.d aggregate.d aliasthis.d apply.d \
@@ -510,5 +510,5 @@ $(GENSRC) : $(SRC) $(ROOT_SRC) settings.json $(MAGICPORT)
 
 DSRC= $(GENSRC) $(MANUALSRC)
 
-ddmd: $(DC) $(DSRC) glue.a backend.a outbuffer.o aav.o stringtable.o
-	CC=$(HOST_CC) $(DC) $(MODEL_FLAG) $(DSRC) -ofddmd glue.a backend.a outbuffer.o aav.o stringtable.o -debug -vtls -J.. -d -version=DMDV2 -g
+ddmd: $(DC) $(DSRC) glue.a backend.a outbuffer.o stringtable.o
+	CC=$(HOST_CC) $(DC) $(MODEL_FLAG) -version=GC $(DSRC) -ofddmd glue.a backend.a outbuffer.o stringtable.o -debug -vtls -J.. -d -version=DMDV2 -g
