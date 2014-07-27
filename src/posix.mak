@@ -138,6 +138,9 @@ DMD_OBJS = \
 	imphint.o argtypes.o apply.o sapply.o sideeffect.o \
 	intrange.o canthrow.o target.o nspace.o color.o
 
+DDMD_OBJS = \
+	mem_cpp.o
+
 ROOT_OBJS = \
 	rmem.o port.o man.o stringtable.o response.o \
 	aav.o speller.o outbuffer.o object.o \
@@ -195,6 +198,9 @@ SRC = win32.mak posix.mak osmodel.mak \
 	intrange.h intrange.c canthrow.c target.c target.h \
 	scanmscoff.c scanomf.c ctfe.h ctfeexpr.c \
 	ctfe.h ctfeexpr.c visitor.h nspace.h nspace.c
+
+DDMD_SRC = \
+	mem_cpp.c
 
 ROOT_SRC = $(ROOT)/root.h \
 	$(ROOT)/array.h \
@@ -365,6 +371,9 @@ $(ROOT_OBJS): %.o: $(ROOT)/%.c posix.mak
 	@echo "  (CC)  ROOT_OBJS  $<"
 	$(CC) -c $(CFLAGS) $(ROOT_FLAGS) $(MMD) $<
 
+$(DDMD_OBJS): %.o: %.c posix.mak
+	@echo "  (CC)  DDMD_OBJS   $<"
+	$(CC) -c $(CFLAGS) $(DMD_FLAGS) $(MMD) $<
 
 -include $(DEPS)
 
@@ -510,5 +519,5 @@ $(GENSRC) : $(SRC) $(ROOT_SRC) settings.json $(MAGICPORT)
 
 DSRC= $(GENSRC) $(MANUALSRC)
 
-ddmd: $(DC) $(DSRC) glue.a backend.a outbuffer.o stringtable.o
-	CC=$(HOST_CC) $(DC) $(MODEL_FLAG) -version=GC $(DSRC) -ofddmd glue.a backend.a outbuffer.o stringtable.o -debug -vtls -J.. -d -version=DMDV2 -g
+ddmd: $(DC) $(DSRC) glue.a backend.a outbuffer.o stringtable.o mem_cpp.o
+	CC=$(HOST_CC) $(DC) $(MODEL_FLAG) -version=GC $(DSRC) -ofddmd glue.a backend.a outbuffer.o stringtable.o mem_cpp.o -debug -vtls -J.. -d -version=DMDV2 -g
